@@ -160,7 +160,7 @@ def generate(nx, ny, delta=0.01):
         xt = torch.linspace(0, 1, nx, device='cuda')
         yt = torch.linspace(0, 1, ny, device='cuda')
         x, y = torch.meshgrid(xt, yt, indexing='ij')
-        v = 128 * (1 + torch.sin((x * y + t) * 2 * np.pi))
+        v = 127.5 * (1 + torch.sin((x * y + t) * 2 * np.pi))
         ones = torch.ones_like(v, device='cuda')
         test_tensor = torch.stack([v, v, v, ones], dim=-1)
         yield test_tensor.byte()
