@@ -1,0 +1,30 @@
+# testing functions
+
+import torch
+
+from .utils import quantize
+from .hiviz import HiViz
+
+# generate white noise
+def generate_white_noise(size=(512, 512)):
+    while True:
+        yield torch.randint(0, 256, size, device='cuda', dtype=torch.uint8)
+
+# generate wave fronts
+def generate_wave_fronts(size=(512, 512)):
+    width, height = size
+    delta = 0.01
+    t = 0
+    while True:
+        xt = torch.linspace(0, 1, width, device='cuda')
+        yt = torch.linspace(0, 1, height, device='cuda')
+        x, y = torch.meshgrid(xt, yt, indexing='ij')
+        v = 1 + torch.sin((x * y + t) * 2 * torch.pi)
+        yield quantize(v, scale=(0, 2))
+        t = (t + delta) % 1
+
+# run test function
+def run_test(gen, size=(512, 512)):
+    viz = HiViz(size)
+    viz.animate(gen(size))
+    viz.cleanup()

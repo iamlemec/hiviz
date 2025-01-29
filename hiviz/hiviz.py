@@ -6,7 +6,7 @@ import cuda.cudart as cudart
 import cuda.cuda as cuda
 
 class TorchGLInterop:
-    def __init__(self, width, height, channels=4):
+    def __init__(self, width, height, channels=3):
         self.width = width
         self.height = height
         self.channels = channels
@@ -37,6 +37,7 @@ class TorchGLInterop:
     def tensor_to_texture(self, tensor):
         assert tensor.is_cuda, 'Input tensor must be on CUDA device'
         assert tensor.shape == (self.height, self.width, self.channels), 'Tensor shape mismatch'
+        assert tensor.dtype == torch.uint8, 'Tensor must be uint8'
 
         # map graphics resource
         cuda.cuGraphicsMapResources(1, self.cuda_graphics_resource, 0)
@@ -52,7 +53,7 @@ class TorchGLInterop:
         # update texture from PBO
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, self.pbo)
         glBindTexture(GL_TEXTURE_2D, self.texture)
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, self.width, self.height, GL_RGBA, GL_UNSIGNED_BYTE, None)
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, self.width, self.height, GL_RGB, GL_UNSIGNED_BYTE, None)
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0)
 
     def cleanup(self):
@@ -151,8 +152,19 @@ class TextureRenderer:
         glDeleteVertexArrays(1, [self.vao])
         glDeleteProgram(self.shader_program)
 
+def handle_quit(func):
+    def wrapper(*args, **kwargs):
+        try:
+            func(*args, **kwargs)
+        except KeyboardInterrupt:
+            print('Keyboard interrupt')
+            pass
+    return wrapper
+
 class HiViz:
-    def __init__(self, width, height):
+    def __init__(self, size):
+        width, height = size
+
         # initialize glfw
         if not glfw.init():
             raise Exception('Failed to initialize GLFW')
@@ -167,22 +179,22 @@ class HiViz:
         glfw.make_context_current(self.window)
 
         # initialize interop
-        self.interop = TorchGLInterop(width, height, 4)
+        self.interop = TorchGLInterop(width, height, channels=3)
         self.renderer = TextureRenderer()
 
-    # cleanup
-    def __del__(self):
+    def cleanup(self):
         self.renderer.cleanup()
         self.interop.cleanup()
         glfw.terminate()
 
     # main render loop
+    @handle_quit
     def animate(self, generate):
         # set the viewport to match the window size
         fb_width, fb_height = glfw.get_framebuffer_size(self.window)
         glViewport(0, 0, fb_width, fb_height)
 
-        for tensor in generate():
+        for tensor in generate:
             # handle window close
             if glfw.window_should_close(self.window):
                 break
@@ -192,6 +204,10 @@ class HiViz:
             if (new_fb_width, new_fb_height) != (fb_width, fb_height):
                 fb_width, fb_height = new_fb_width, new_fb_height
                 glViewport(0, 0, fb_width, fb_height)
+
+            # handle grayscale tensors
+            if tensor.ndim == 2:
+                tensor = torch.stack([tensor, tensor, tensor], dim=-1)
 
             # copy tensor to texture
             self.interop.tensor_to_texture(tensor)
@@ -203,25 +219,3 @@ class HiViz:
             # swap buffers
             glfw.swap_buffers(self.window)
             glfw.poll_events()
-
-if __name__ == '__main__':
-    # animation parameters
-    nx, ny = 512, 512
-    delta = 0.01
-
-    # generate animation frames
-    def generate():
-        t = 0
-        while True:
-            xt = torch.linspace(0, 1, nx, device='cuda')
-            yt = torch.linspace(0, 1, ny, device='cuda')
-            x, y = torch.meshgrid(xt, yt, indexing='ij')
-            v = 127.5 * (1 + torch.sin((x * y + t) * 2 * np.pi))
-            ones = torch.ones_like(v, device='cuda')
-            test_tensor = torch.stack([v, v, v, ones], dim=-1)
-            yield test_tensor.byte()
-            t = (t + delta) % 1
-
-    # animate frames
-    viz = HiViz(512, 512)
-    viz.animate(generate)
