@@ -13,12 +13,9 @@ def generate_white_noise(size=(512, 512)):
 # generate wave fronts
 def generate_wave_fronts(size=(512, 512)):
     width, height = size
-    delta = 0.01
-    t = 0
+    x, y = meshgrid(size, device='cuda')
+    t, delta = 0, 0.01
     while True:
-        xt = torch.linspace(0, 1, width, device='cuda')
-        yt = torch.linspace(0, 1, height, device='cuda')
-        x, y = torch.meshgrid(xt, yt, indexing='ij')
         v = 1 + torch.sin((x * y + t) * 2 * torch.pi)
         yield quantize(v, scale=(0, 2))
         t = (t + delta) % 1
