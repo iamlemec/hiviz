@@ -151,55 +151,58 @@ class TextureRenderer:
         glDeleteVertexArrays(1, [self.vao])
         glDeleteProgram(self.shader_program)
 
-def animate(width, height, generate):
-    # initialize glfw
-    if not glfw.init():
-        return
+class HiViz:
+    def __init__(self, width, height):
+        # initialize glfw
+        if not glfw.init():
+            raise Exception('Failed to initialize GLFW')
 
-    # create window
-    window = glfw.create_window(width, height, 'HiViz', None, None)
-    if not window:
-        glfw.terminate()
-        return
+        # create window
+        self.window = glfw.create_window(width, height, 'HiViz', None, None)
+        if not self.window:
+            glfw.terminate()
+            raise Exception('Failed to create window')
 
-    # set opengl context to this window's context
-    glfw.make_context_current(window)
+        # set opengl context to this window's context
+        glfw.make_context_current(self.window)
 
-    # set the viewport to match the window size
-    fb_width, fb_height = glfw.get_framebuffer_size(window)
-    glViewport(0, 0, fb_width, fb_height)
-
-    # initialize interop
-    interop = TorchGLInterop(width, height, 4)
-    renderer = TextureRenderer()
-
-    # main render loop
-    for tensor in generate():
-        # handle window close
-        if glfw.window_should_close(window):
-            break
-
-        # update viewport on window resize
-        new_fb_width, new_fb_height = glfw.get_framebuffer_size(window)
-        if (new_fb_width, new_fb_height) != (fb_width, fb_height):
-            fb_width, fb_height = new_fb_width, new_fb_height
-            glViewport(0, 0, fb_width, fb_height)
-
-        # copy tensor to texture
-        interop.tensor_to_texture(tensor)
-
-        # render texture
-        glClear(GL_COLOR_BUFFER_BIT)
-        renderer.render(interop.texture)
-
-        # swap buffers
-        glfw.swap_buffers(window)
-        glfw.poll_events()
+        # initialize interop
+        self.interop = TorchGLInterop(width, height, 4)
+        self.renderer = TextureRenderer()
 
     # cleanup
-    renderer.cleanup()
-    interop.cleanup()
-    glfw.terminate()
+    def __del__(self):
+        self.renderer.cleanup()
+        self.interop.cleanup()
+        glfw.terminate()
+
+    # main render loop
+    def animate(self, generate):
+        # set the viewport to match the window size
+        fb_width, fb_height = glfw.get_framebuffer_size(self.window)
+        glViewport(0, 0, fb_width, fb_height)
+
+        for tensor in generate():
+            # handle window close
+            if glfw.window_should_close(self.window):
+                break
+
+            # update viewport on window resize
+            new_fb_width, new_fb_height = glfw.get_framebuffer_size(self.window)
+            if (new_fb_width, new_fb_height) != (fb_width, fb_height):
+                fb_width, fb_height = new_fb_width, new_fb_height
+                glViewport(0, 0, fb_width, fb_height)
+
+            # copy tensor to texture
+            self.interop.tensor_to_texture(tensor)
+
+            # render texture
+            glClear(GL_COLOR_BUFFER_BIT)
+            self.renderer.render(self.interop.texture)
+
+            # swap buffers
+            glfw.swap_buffers(self.window)
+            glfw.poll_events()
 
 if __name__ == '__main__':
     # animation parameters
@@ -220,4 +223,5 @@ if __name__ == '__main__':
             t = (t + delta) % 1
 
     # animate frames
-    animate(512, 512, generate)
+    viz = HiViz(512, 512)
+    viz.animate(generate)
