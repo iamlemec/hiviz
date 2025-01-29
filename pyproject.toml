@@ -1,0 +1,21 @@
+[project]
+name = 'hiviz'
+version = '0.1.0'
+description = 'HiViz is a Python library for visualizing PyTorch tensors in real-time using OpenGL.'
+readme = { file = 'README.md' , content-type = 'text/markdown' }
+authors = [{ name = 'Doug Hanley', email = 'doug@compendiumlabs.ai' }]
+license = { text = 'MIT' }
+classifiers = [
+    'License :: OSI Approved :: MIT License',
+    'Programming Language :: Python',
+    'Programming Language :: Python :: 3',
+]
+keywords = ['visualization', 'opengl', 'torch']
+dependencies = ['torch', 'PyOpenGL', 'glfw', 'cuda-python']
+requires-python = '>=3.10'
+
+[project.urls]
+Homepage = 'http://github.com/iamlemec/hiviz'
+
+[tool.setuptools]
+packages = ['hiviz']
