@@ -23,6 +23,17 @@ def generate_wave_fronts(size=(512, 512)):
         yield quantize(v, scale=(0, 2))
         t = (t + delta) % 1
 
+def minimize(f, x0, step=0.01):
+    x = x0.to('cuda', copy=True)
+    x.requires_grad = True
+    opt = torch.optim.SGD([x], lr=step)
+    while True:
+        loss = f(x)
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+        yield quantize(x.detach(), scale=(-2, 2))
+
 # run test function
 def run_test(gen, size=(512, 512)):
     viz = HiViz(size)

@@ -182,10 +182,29 @@ class HiViz:
         self.interop = TorchGLInterop(width, height, channels=3)
         self.renderer = TextureRenderer()
 
-    def cleanup(self):
+    def __del__(self):
+        self.close()
+
+    def close(self):
         self.renderer.cleanup()
         self.interop.cleanup()
         glfw.terminate()
+
+    def show(self, tensor):
+        # handle grayscale tensors
+        if tensor.ndim == 2:
+            tensor = torch.stack([tensor, tensor, tensor], dim=-1)
+
+        # copy tensor to texture
+        self.interop.tensor_to_texture(tensor)
+
+        # render texture
+        glClear(GL_COLOR_BUFFER_BIT)
+        self.renderer.render(self.interop.texture)
+
+        # swap buffers
+        glfw.swap_buffers(self.window)
+        glfw.poll_events()
 
     # main render loop
     @handle_quit
@@ -205,17 +224,5 @@ class HiViz:
                 fb_width, fb_height = new_fb_width, new_fb_height
                 glViewport(0, 0, fb_width, fb_height)
 
-            # handle grayscale tensors
-            if tensor.ndim == 2:
-                tensor = torch.stack([tensor, tensor, tensor], dim=-1)
-
-            # copy tensor to texture
-            self.interop.tensor_to_texture(tensor)
-
-            # render texture
-            glClear(GL_COLOR_BUFFER_BIT)
-            self.renderer.render(self.interop.texture)
-
-            # swap buffers
-            glfw.swap_buffers(self.window)
-            glfw.poll_events()
+            # show tensor
+            self.show(tensor)
