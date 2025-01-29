@@ -34,7 +34,7 @@ class TorchGLInterop:
             int(cudart.cudaGraphicsRegisterFlags.cudaGraphicsRegisterFlagsWriteDiscard)
         )
 
-    def transfer_tensor_to_texture(self, tensor):
+    def tensor_to_texture(self, tensor):
         assert tensor.is_cuda, 'Input tensor must be on CUDA device'
         assert tensor.shape == (self.height, self.width, self.channels), 'Tensor shape mismatch'
 
@@ -61,10 +61,7 @@ class TorchGLInterop:
         glDeleteTextures([self.texture])
 
 class TextureRenderer:
-    def __init__(self, texture_width, texture_height):
-        self.texture_width = texture_width
-        self.texture_height = texture_height
-
+    def __init__(self):
         # vertex shader for rendering a textured quad
         vertex_shader = """
         #version 330 core
@@ -154,30 +151,18 @@ class TextureRenderer:
         glDeleteVertexArrays(1, [self.vao])
         glDeleteProgram(self.shader_program)
 
-def generate(nx, ny, delta=0.01):
-    t = 0
-    while True:
-        xt = torch.linspace(0, 1, nx, device='cuda')
-        yt = torch.linspace(0, 1, ny, device='cuda')
-        x, y = torch.meshgrid(xt, yt, indexing='ij')
-        v = 128 * (1 + torch.sin((x * y + t) * 2 * np.pi))
-        ones = torch.ones_like(v, device='cuda')
-        test_tensor = torch.stack([v, v, v, ones], dim=-1)
-        yield test_tensor.byte()
-        t = (t + delta) % 1
-
-def main():
-    # parameters
-    texture_width, texture_height = 512, 512
-    delta = 0.01
-
-    # initialize glfw and create window
+def animate(width, height, generate):
+    # initialize glfw
     if not glfw.init():
         return
-    window = glfw.create_window(texture_width, texture_height, 'HiViz', None, None)
+
+    # create window
+    window = glfw.create_window(width, height, 'HiViz', None, None)
     if not window:
         glfw.terminate()
         return
+
+    # set opengl context to this window's context
     glfw.make_context_current(window)
 
     # set the viewport to match the window size
@@ -185,11 +170,12 @@ def main():
     glViewport(0, 0, fb_width, fb_height)
 
     # initialize interop
-    interop = TorchGLInterop(texture_width, texture_height, 4)
-    renderer = TextureRenderer(texture_width, texture_height)
+    interop = TorchGLInterop(width, height, 4)
+    renderer = TextureRenderer()
 
     # main render loop
-    for test_tensor in generate(texture_width, texture_height, delta):
+    for tensor in generate():
+        # handle window close
         if glfw.window_should_close(window):
             break
 
@@ -200,7 +186,7 @@ def main():
             glViewport(0, 0, fb_width, fb_height)
 
         # copy tensor to texture
-        interop.transfer_tensor_to_texture(test_tensor)
+        interop.tensor_to_texture(tensor)
 
         # render texture
         glClear(GL_COLOR_BUFFER_BIT)
@@ -216,4 +202,22 @@ def main():
     glfw.terminate()
 
 if __name__ == '__main__':
-    main()
+    # animation parameters
+    nx, ny = 512, 512
+    delta = 0.01
+
+    # generate animation frames
+    def generate():
+        t = 0
+        while True:
+            xt = torch.linspace(0, 1, nx, device='cuda')
+            yt = torch.linspace(0, 1, ny, device='cuda')
+            x, y = torch.meshgrid(xt, yt, indexing='ij')
+            v = 128 * (1 + torch.sin((x * y + t) * 2 * np.pi))
+            ones = torch.ones_like(v, device='cuda')
+            test_tensor = torch.stack([v, v, v, ones], dim=-1)
+            yield test_tensor.byte()
+            t = (t + delta) % 1
+
+    # animate frames
+    animate(512, 512, generate)
